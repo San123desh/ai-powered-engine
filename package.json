@@ -1,0 +1,16 @@
+{
+  "name": "ai_engine",
+  "version": "1.0.0",
+  "description": "A REST API for an AI-powered engine integrated with a code editor to provide real-time assistance.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0"
+  }
+}

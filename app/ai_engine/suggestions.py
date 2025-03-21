@@ -1,69 +1,56 @@
-from transformers import AutoModelForCausalLM, AutoTokenizer
-from app.ai_engine.utils import get_codebert_model
+from app.ai_engine.utils import get_ollama_client
 from cachetools import LRUCache
 
-# Initialize a cache for storing previous code suggestions
-suggestion_cache = LRUCache(maxsize=5000)
+# Initialize cache (max 1000 entries) to store previously requested suggestions
+suggestion_cache = LRUCache(maxsize=1000)
 
-model, tokenizer = get_codebert_model()
+# Get Ollama client
+ollama_client = get_ollama_client()
 
-def suggest_code(code: str, cursor_position: int, context: dict) -> str:
+def suggest_code(code, cursor_position, context):
     """
-    Generate inline code suggestions based on the code, cursor position, and context.
+    Generate inline code suggestions using Ollama with caching.
     """
-
-    #create a cache key based on inputs
+    # Create a cache key based on input parameters
     cache_key = (code, cursor_position, tuple(sorted(context.items())))
 
-    # Check if the suggestion is already in the cache
+    # Check if the result is already cached and return if available
     if cache_key in suggestion_cache:
         return suggestion_cache[cache_key]
 
-
-    # Extract programming language from context (default to Python if not provided)
     language = context.get("language", "python").lower()
-
-    # Extract code before the cursor position
     if cursor_position is None or cursor_position < 0:
         cursor_position = len(code)
     code_prefix = code[:cursor_position].strip()
 
-    # Tokenize code prefix and generate tokenized input
-    input_text = f"{code_prefix} # {language}"
-    inputs = tokenizer(input_text, return_tensors="pt", max_length= 128, truncation=True, padding="max_length")
-    outputs = model.generate(
-        **inputs,
-        max_length=100,
-        num_return_sequences=1,
-        no_repeat_ngram_size=2,
-        # stop_token_id=tokenizer.eos_token_id,
-        # pad_token_id=tokenizer.pad_token_id,
-        # eos_token_id=tokenizer.eos_token_id,
-        do_sample=True,
-        temperature=0.9,
-        top_k=50,
-        top_p=0.95,
-    )
+    # Prepare prompt for Ollama
+    prompt = f"Given the following {language} code, provide the next line of code to continue the function (do not include markdown, code blocks, or explanations):\n{code_prefix}\n# Return the next line of code"
 
-    #decode the generated suggestion
-    suggestion = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    suggestion = suggestion[len(code_prefix):].strip().split('\n')[0]
+    # Call Ollama codellama model to generate suggestion
+    response = ollama_client.generate(model="codellama", prompt=prompt)
+    suggestion = response['response'].strip()
 
-    #fall back to the original suggestion if there was no suggestion 
-    # if not suggestion or "#" in suggestion:
-    #     if language == "python":
-    #         return "pass # suggested"
-    #     elif language == "javascript":
-    #         return "return null; // suggested placeholder"
-    #     else:
-    #         return "// suggestion for unsupported language"
-        
-    
-    # return suggestion
+    # Parse the response to extract the suggestion (remove markdown code blocks)
+    lines = suggestion.split("\n")
+    suggestion_lines = []
+    in_code_block = False
+    for line in lines:
+        if line.strip() == "```":
+            in_code_block = not in_code_block
+        elif in_code_block and line.strip():
+            suggestion_lines.append(line.strip())
+        elif not in_code_block and line.strip():
+            suggestion_lines.append(line.strip())
+    suggestion = suggestion_lines[0] if suggestion_lines else ""
 
+    # Add indentation for Python(4 spaces: Standard Python indentation) 
+    if language == "python" and suggestion:
+        suggestion = "    " + suggestion
+
+    # Fallback if suggestion is empty or invalid
     if not suggestion or "#" in suggestion:
         if language == "python":
-            suggestion = "pass  # suggested"
+            suggestion = "    pass  # suggested"
         elif language == "javascript":
             suggestion = "return null;  // Suggested placeholder"
         else:
@@ -72,25 +59,3 @@ def suggest_code(code: str, cursor_position: int, context: dict) -> str:
     # Cache the result
     suggestion_cache[cache_key] = suggestion
     return suggestion
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
