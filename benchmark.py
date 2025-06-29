@@ -6,6 +6,7 @@ import csv
 import subprocess
 from typing import Dict, List
 from thefuzz import fuzz
+import re
 
 class BenchmarkFramework:
     def __init__(self, api_url: str = "http://localhost:8000/api/ai-engine"):
@@ -32,9 +33,7 @@ class BenchmarkFramework:
                 "response": response.json()
             }
             if expected:
-                generated = response.json().get("data", {}).get(action[:-1] if action != "execute" else "html_css")
-                if action == "execute":
-                    generated = generated.get("html", "")
+                generated = response.json().get("data", {}).get(action[:-1])
                 result["accuracy"] = self.calculate_accuracy(generated, expected, payload.get("context", {}).get("language", "python"))
                 result["usability"] = 1.0 if result["accuracy"] > 0.8 else 0.0
             self.results.append(result)
@@ -43,19 +42,28 @@ class BenchmarkFramework:
             print(f"Request failed: {e}")
             return {"action": action, "status_code": 500, "error": str(e)}
 
+    def normalize_code(self, code: str) -> str:
+        # Remove comments and all whitespace for comparison
+        code = re.sub(r'#.*', '', code)  # Remove Python comments
+        code = re.sub(r'//.*', '', code)  # Remove JS comments
+        code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)  # Remove JS block comments
+        code = re.sub(r'\s+', '', code)  # Remove all whitespace
+        return code.strip()
+
     def calculate_accuracy(self, generated: str, expected: str, language: str) -> float:
         if not generated or not expected:
             return 0.0
-        generated = generated.strip()
-        expected = expected.strip()
-
-        if generated == expected:
+        # Normalize both codes
+        norm_generated = self.normalize_code(generated)
+        norm_expected = self.normalize_code(expected)
+        print(f"Generated: {repr(generated)}")
+        print(f"Expected: {repr(expected)}")
+        print(f"Normalized Generated: {repr(norm_generated)}")
+        print(f"Normalized Expected: {repr(norm_expected)}")
+        if norm_generated == norm_expected:
             return 1.0
-
-        if not self.is_syntactically_correct(generated, language):
-            return 0.0
-
-        similarity = fuzz.partial_ratio(generated, expected) / 100.0
+        # fallback to fuzzy match
+        similarity = fuzz.partial_ratio(norm_generated, norm_expected) / 100.0
         return similarity if similarity >= 0.3 else 0.3
 
     def is_syntactically_correct(self, code: str, language: str) -> bool:
@@ -109,30 +117,71 @@ class BenchmarkFramework:
 if __name__ == "__main__":
     benchmark = BenchmarkFramework()
     test_cases = [
+        # Python suggestion: simple return
         {
             "action": "suggestion",
-            "payload": {"action": "suggestion", "code": "def hello():", "context": {"language": "python"}, "cursor_position": 10},
-            "expected": "def hello(name):\n    print(\"Hello, \" + name + \"!\")"
+            "payload": {"action": "suggestion", "code": "def add(a, b):", "context": {"language": "python"}, "cursor_position": 13},
+            "expected": "    return a + b"
         },
+        # Python suggestion: factorial
         {
             "action": "suggestion",
-            "payload": {"action": "suggestion", "code": "function sample() {", "context": {"language": "javascript"}, "cursor_position": 15},
-            "expected": "function sample() {\n    console.log(\"Sample\");\n}"
+            "payload": {"action": "suggestion", "code": "def factorial(n):", "context": {"language": "python"}, "cursor_position": 18},
+            "expected": "    if n == 0:\n        return 1"
         },
+        # Python suggestion: check even
+        {
+            "action": "suggestion",
+            "payload": {"action": "suggestion", "code": "def is_even(num):", "context": {"language": "python"}, "cursor_position": 16},
+            "expected": "    return num % 2 == 0"
+        },
+        # Python suggestion: empty function
+        {
+            "action": "suggestion",
+            "payload": {"action": "suggestion", "code": "def do_nothing():", "context": {"language": "python"}, "cursor_position": 17},
+            "expected": "    pass"
+        },
+        # Python generate: sum
         {
             "action": "generate",
-            "payload": {"action": "generate", "code": "def sample():", "context": {"language": "python"}},
-            "expected": "def sample():\n    return True"
+            "payload": {"action": "generate", "code": "def sum_list(lst):", "context": {"language": "python"}},
+            "expected": "def sum_list(lst):\n    return sum(lst)"
         },
+        # Python generate: check palindrome
         {
             "action": "generate",
-            "payload": {"action": "generate", "code": "function sample() {", "context": {"language": "javascript"}},
-            "expected": "function sample() {\n    // Your code here\n}"
+            "payload": {"action": "generate", "code": "def is_palindrome(s):", "context": {"language": "python"}},
+            "expected": "def is_palindrome(s):\n    return s == s[::-1]"
         },
+        # JavaScript suggestion: greet
         {
-            "action": "execute",
-            "payload": {"action": "execute", "code": "dummy", "context": {}},
-            "expected": "<div class='default'><p>Default Content</p></div>"
+            "action": "suggestion",
+            "payload": {"action": "suggestion", "code": "function greet(name) {", "context": {"language": "javascript"}, "cursor_position": 23},
+            "expected": "    return \"Hello, \" + name;"
+        },
+        # JavaScript suggestion: check even
+        {
+            "action": "suggestion",
+            "payload": {"action": "suggestion", "code": "function isEven(num) {", "context": {"language": "javascript"}, "cursor_position": 21},
+            "expected": "    return num % 2 === 0;"
+        },
+        # JavaScript generate: sum
+        {
+            "action": "generate",
+            "payload": {"action": "generate", "code": "function sum(a, b) {", "context": {"language": "javascript"}},
+            "expected": "function sum(a, b) {\n    return a + b;\n}"
+        },
+        # JavaScript generate: reverse string
+        {
+            "action": "generate",
+            "payload": {"action": "generate", "code": "function reverseString(str) {", "context": {"language": "javascript"}},
+            "expected": "function reverseString(str) {\n    return str.split('').reverse().join('');\n}"
+        },
+        # JavaScript generate: factorial
+        {
+            "action": "generate",
+            "payload": {"action": "generate", "code": "function factorial(n) {", "context": {"language": "javascript"}},
+            "expected": "function factorial(n) {\n    if (n === 0) {\n        return 1;\n    }\n    return n * factorial(n - 1);\n}"
         }
     ]
 

@@ -5,13 +5,36 @@ engine-ai
 node_modules/
 package-lock.json
 
+# Python virtual environments
 venv/
+.env
+.env.*
+
+# Python cache and test cache
 __pycache__/
 *.pyc
 .pytest_cache/
 *.egg-info/
-.env
 
-#Benchmark output
+# FastAPI/Ollama model/data artifacts
+*.h5
+*.npy
+*.json
+*.weights.*
+
+# Benchmark outputs
 benchmark_report.png
 benchmark_results.csv
+
+# Datasets and model folders
+datasets/
+benchmark/
+
+# Logs
+*.log
+
+# IDE/editor files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

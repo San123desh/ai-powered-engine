@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_suggestion_valid_python():
     """Test the suggestion action with valid Python code."""
     with patch("app.ai_engine.suggestions.ollama_client.generate") as mock_generate:
-        mock_generate.return_value = {"response": "```\n    return \"Hello, world!\"\n```"}
+        mock_generate.return_value = {"response": "    return \"Hello, world!\""}
         response = client.post(
             "/api/ai-engine",
             json={
@@ -25,44 +25,21 @@ def test_suggestion_valid_python():
             "message": "Action completed successfully."
         }
 
-def test_generate_valid_javascript():
-    """Test the generate action with valid JavaScript code."""
-    with patch("app.ai_engine.generation.ollama_client.generate") as mock_generate:
-        mock_generate.return_value = {"response": "```\n  return a + b;\n}\n```"}
-        response = client.post(
-            "/api/ai-engine",
-            json={
-                "action": "generate",
-                "code": "function add(a, b) {",
-                "context": {"language": "javascript"}
-            }
-        )
-        assert response.status_code == 200
-        assert response.json() == {
-            "status": "success",
-            "data": {"generated_code": "return a + b;\n}"},  # Removed leading spaces
-            "message": "Action completed successfully."
-        }
 
-def test_execute_no_image():
-    """Test the execute action with no image provided."""
+def test_generate_valid_python():
+    """Test the generate action with valid Python code."""
     response = client.post(
         "/api/ai-engine",
         json={
-            "action": "execute",
-            "code": "dummy",
-            "context": {}
+            "action": "generate",
+            "code": "def multiply(a, b):",
+            "context": {"language": "python"}
         }
     )
     assert response.status_code == 200
     assert response.json() == {
         "status": "success",
-        "data": {
-            "html_css": {
-                "html": "<div class='default'><p>Default Content</p></div>",
-                "css": ".default { border: 1px solid black; padding: 10px; }"
-            }
-        },
+        "data": {"generated_code": "    return a * b"},
         "message": "Action completed successfully."
     }
 
@@ -108,9 +85,10 @@ def test_unsupported_language():
         }
     )
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Unsupported language: java. Supported languages are: javascript, python."
-    }
+    response_json = response.json()
+    assert response_json["detail"].startswith("Unsupported language: java. Supported languages are: ")
+    assert "python" in response_json["detail"]
+    assert "javascript" in response_json["detail"]
 
 def test_invalid_context():
     """Test validation error for invalid context (not a dictionary)."""

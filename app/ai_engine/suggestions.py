@@ -59,3 +59,4 @@ def suggest_code(code, cursor_position, context):
     # Cache the result
     suggestion_cache[cache_key] = suggestion
     return suggestion
+

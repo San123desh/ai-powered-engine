@@ -1,15 +1,12 @@
 from fastapi import FastAPI, HTTPException
-from app.models.schemas import AIRequest, AIResponse, HtmlCss
+from app.models.schemas import AIRequest, AIResponse
 from app.ai_engine.suggestions import suggest_code
 from app.ai_engine.generation import generate_function
-from app.ai_engine.html_css import generate_html_css
-
 import logging
 
 # Set up logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
 
 app = FastAPI(
     title="AI Assistant",
@@ -17,20 +14,18 @@ app = FastAPI(
     version="1.0.0"
 )
 
-#Define API endpoint
-# POST request handler for API requests with AIResponse
 @app.post("/api/ai-engine", response_model=AIResponse)
 async def ai_engine(request: AIRequest):
     logger.debug(f"Received request: {request}")
 
-    #check if the code field is not empty
+    # Check if the code field is not empty
     if not request.code.strip():
         raise HTTPException(status_code=400, detail="Code parameter cannot be empty.")
-    #Check if the cursor position is valid 
+    # Check if the cursor position is valid
     if request.cursor_position is not None and (request.cursor_position < 0 or request.cursor_position > len(request.code)):
         raise HTTPException(status_code=400, detail="Invalid cursor position.")
 
-    # Validate context field( dictionary)
+    # Validate context field (dictionary)
     if request.context is not None:
         if not isinstance(request.context, dict):
             raise HTTPException(status_code=400, detail="Context must be a dictionary.")
@@ -56,7 +51,6 @@ async def ai_engine(request: AIRequest):
             logger.debug(f"Suggestion result: {suggestion}")
             data["suggestion"] = suggestion
 
-
         elif request.action == "generate":
             logger.debug("Calling generate_function")
             generated_code = generate_function(
@@ -66,19 +60,12 @@ async def ai_engine(request: AIRequest):
             logger.debug(f"Generated code: {generated_code}")
             data["generated_code"] = generated_code
 
-
-        elif request.action == "execute":
-            logger.debug("Calling generate_html_css")
-            html_css = generate_html_css(context=request.context or {})
-            logger.debug(f"HTML/CSS result: {html_css}")
-            data["html_css"] = html_css.model_dump()
-
         return AIResponse(
             status="success",
             data=data,
             message=message
         )
-    
+
     except HTTPException as e:
         logger.error(f"HTTPException: {str(e)}")
         raise e

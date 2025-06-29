@@ -5,12 +5,6 @@ from pydantic import BaseModel
 class ActionType(str, Enum):
     SUGGESTION = 'suggestion'
     GENERATE = 'generate'
-    EXECUTE = 'execute'
-
-# Schema for the 'html_css' field in the response
-class HtmlCss(BaseModel):
-    html: str
-    css: str
 
 # validates the incoming request payload for /api/ai-engine endpoint
 class AIRequest(BaseModel):
